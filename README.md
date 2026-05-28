@@ -48,3 +48,16 @@ pi -e /path/to/pi-axonhub
 ```
 
 OpenAI-compatible models are sent to AxonHub `/v1`. Anthropic-owned models are sent to AxonHub `/anthropic`. Gemini-owned models are sent to AxonHub `/gemini`.
+
+The extension auto-detects the thinking protocol for OpenAI-compatible models so that reasoning parameters are sent in the format expected by the upstream provider, not a generic OpenAI format. When both a routing/hosting provider hint (OpenRouter, Together) and a model-family keyword (DeepSeek, Qwen, etc.) are present, the routing provider wins because the wire protocol is determined by the endpoint, not the model family.
+
+| Detected provider | `thinkingFormat`  | Supported thinking levels        | Wire parameters                               |
+| ----------------- | ----------------- | -------------------------------- | --------------------------------------------- |
+| DeepSeek          | `deepseek`        | off, high, xhigh → max           | `thinking: { type }, reasoning_effort`        |
+| Qwen / Alibaba    | `qwen`            | off, high                        | `enable_thinking`                             |
+| Z.ai / Zhipu/GLM | `zai`             | off, high                        | `enable_thinking`                             |
+| Together          | `together`        | off, high                        | `reasoning: { enabled }`                      |
+| OpenRouter        | `openrouter`      | off, low, medium, high           | `reasoning: { effort }`                       |
+| Unknown / generic | `openai`          | off                              | `reasoning_effort` (not sent if unsupported)  |
+
+Detection uses `owned_by`, `models.dev` provider id, and model id/name keywords with the precedence described above. Models that are not identified fall back to the existing safe generic OpenAI-compatible default.

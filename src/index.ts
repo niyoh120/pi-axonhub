@@ -253,6 +253,8 @@ function modelBaseUrl(baseUrl: string, owner?: string) {
   return `${baseUrl}/v1`;
 }
 
+import { type ThinkingKind, detectThinkingKind, modelThinkingCompat, modelThinkingLevelMap } from "./thinking.js";
+
 function isAnthropicAdaptiveThinkingModel(id: string) {
   return (
     id.includes("opus-4-6") ||
@@ -264,18 +266,17 @@ function isAnthropicAdaptiveThinkingModel(id: string) {
   );
 }
 
-function modelCompat(id: string, owner?: string): ProviderModelConfig["compat"] | undefined {
+function modelCompat(
+  id: string,
+  owner?: string,
+  thinkingKind?: ThinkingKind,
+): ProviderModelConfig["compat"] | undefined {
   if (owner === "anthropic") {
     return isAnthropicAdaptiveThinkingModel(id) ? { forceAdaptiveThinking: true } : undefined;
   }
   if (owner === "gemini") return undefined;
-  return {
-    supportsStore: false,
-    supportsDeveloperRole: false,
-    supportsReasoningEffort: false,
-    maxTokensField: "max_tokens" as const,
-    thinkingFormat: "openai" as const,
-  };
+  if (!thinkingKind) return undefined;
+  return modelThinkingCompat(thinkingKind) as unknown as ProviderModelConfig["compat"];
 }
 
 function toProviderModel(baseUrl: string, item: AxonHubModel, match?: ModelsDevMatch): AxonHubModelConfig | undefined {
@@ -283,13 +284,17 @@ function toProviderModel(baseUrl: string, item: AxonHubModel, match?: ModelsDevM
 
   const cached = match?.model;
   const owner = ownerFromMatch(item, match);
+  const api = modelApi(item.id, owner);
   const supportsVision = item.capabilities?.vision ?? cached?.attachment ?? hasModality(cached, "input", "image") ?? true;
+  const reasoning = item.capabilities?.reasoning ?? cached?.reasoning ?? true;
 
-  return {
+  const thinkingKind = api === "openai-completions" ? detectThinkingKind(item, match) : undefined;
+
+  const result: AxonHubModelConfig = {
     id: item.id,
     name: item.name ?? item.display_name ?? cached?.name ?? item.id,
-    api: modelApi(item.id, owner),
-    reasoning: item.capabilities?.reasoning ?? cached?.reasoning ?? true,
+    api,
+    reasoning,
     input: supportsVision ? ["text", "image"] : ["text"],
     cost: {
       input: item.pricing?.input ?? cached?.cost?.input ?? 0,
@@ -299,10 +304,20 @@ function toProviderModel(baseUrl: string, item: AxonHubModel, match?: ModelsDevM
     },
     contextWindow: item.context_length ?? cached?.limit?.context ?? 200000,
     maxTokens: item.max_output_tokens ?? cached?.limit?.output ?? 32000,
-    compat: modelCompat(item.id, owner),
+    compat: modelCompat(item.id, owner, thinkingKind),
     baseUrl: modelBaseUrl(baseUrl, owner),
   };
+
+  if (reasoning && thinkingKind) {
+    const levelMap = modelThinkingLevelMap(thinkingKind);
+    if (levelMap) result.thinkingLevelMap = levelMap;
+  }
+
+  return result;
 }
+
+// Exported for validation/testing — not part of the extension API surface.
+export { detectThinkingKind, modelCompat, modelThinkingLevelMap };
 
 export default async function (pi: ExtensionAPI, options?: PluginOptions) {
   const baseUrl = resolveBaseUrl(options);

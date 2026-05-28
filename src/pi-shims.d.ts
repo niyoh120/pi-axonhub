@@ -100,6 +100,7 @@ declare module "@earendil-works/pi-coding-agent" {
     cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
     contextWindow: number;
     maxTokens: number;
+    thinkingLevelMap?: Partial<Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh", string | null>>;
     headers?: Record<string, string>;
     compat?: Model<Api>["compat"];
   }
