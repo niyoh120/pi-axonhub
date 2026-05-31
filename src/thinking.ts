@@ -166,13 +166,13 @@ export type ThinkingLevelMap = Partial<Record<
 export function modelThinkingLevelMap(thinkingKind: ThinkingKind): ThinkingLevelMap | undefined {
   switch (thinkingKind) {
     case "deepseek":
-      return { minimal: null, low: null, medium: null, high: "high", xhigh: "max" };
+      return { minimal: null, low: null, medium: null, high: "high", xhigh: "xhigh" };
     case "qwen":
     case "zai":
     case "together":
       return { minimal: null, low: null, medium: null };
     case "openrouter":
-      return { off: "none", minimal: null, low: "low", medium: "medium", high: "high", xhigh: null };
+      return { off: "none", minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh" };
     default:
       return undefined;
   }

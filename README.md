@@ -53,11 +53,11 @@ The extension auto-detects the thinking protocol for OpenAI-compatible models so
 
 | Detected provider | `thinkingFormat`  | Supported thinking levels        | Wire parameters                               |
 | ----------------- | ----------------- | -------------------------------- | --------------------------------------------- |
-| DeepSeek          | `deepseek`        | off, high, xhigh → max           | `thinking: { type }, reasoning_effort`        |
+| DeepSeek          | `deepseek`        | off, high, xhigh                 | `thinking: { type }, reasoning_effort`        |
 | Qwen / Alibaba    | `qwen`            | off, high                        | `enable_thinking`                             |
 | Z.ai / Zhipu/GLM | `zai`             | off, high                        | `enable_thinking`                             |
 | Together          | `together`        | off, high                        | `reasoning: { enabled }`                      |
-| OpenRouter        | `openrouter`      | off, low, medium, high           | `reasoning: { effort }`                       |
+| OpenRouter        | `openrouter`      | off, low, medium, high, xhigh     | `reasoning: { effort }`                       |
 | Unknown / generic | `openai`          | off                              | `reasoning_effort` (not sent if unsupported)  |
 
 Detection uses `owned_by`, `models.dev` provider id, and model id/name keywords with the precedence described above. Models that are not identified fall back to the existing safe generic OpenAI-compatible default.
