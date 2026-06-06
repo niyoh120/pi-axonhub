@@ -181,13 +181,7 @@ async function fetchModels(baseUrl: string, key: string) {
 	return { data: [...byId.values()] };
 }
 
-async function loadModels(baseUrl: string, key: string, ttl: number) {
-	const cached = await readFreshCache<AxonHubModelsResponse>(
-		AXONHUB_CACHE_FILE,
-		ttl,
-	);
-	if (cached) return cached;
-
+async function loadModels(baseUrl: string, key: string) {
 	const payload = await fetchModels(baseUrl, key);
 	await writeCache(AXONHUB_CACHE_FILE, payload);
 	return payload;
@@ -394,7 +388,7 @@ export default async function (pi: ExtensionAPI, options?: PluginOptions) {
 
 	const ttl = options?.cacheTtl ?? CACHE_TTL;
 	const [payload, modelsDev] = await Promise.all([
-		loadModels(baseUrl, key, ttl),
+		loadModels(baseUrl, key),
 		loadModelsDev(ttl),
 	]);
 	const modelIndex = modelsDevIndex(modelsDev);
