@@ -343,6 +343,7 @@ function toProviderModel(
 
 	const thinkingKind =
 		api === "openai-completions" ? detectThinkingKind(item, match) : undefined;
+	const compat = modelCompat(item.id, owner, thinkingKind);
 
 	const result: AxonHubModelConfig = {
 		id: item.id,
@@ -366,7 +367,7 @@ function toProviderModel(
 		},
 		contextWindow: item.context_length ?? cached?.limit?.context ?? 200000,
 		maxTokens: item.max_output_tokens ?? cached?.limit?.output ?? 32000,
-		compat: modelCompat(item.id, owner, thinkingKind),
+		compat: { ...compat, sendSessionAffinityHeaders: true },
 		baseUrl: modelBaseUrl(baseUrl, owner),
 	};
 
