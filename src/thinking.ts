@@ -1,6 +1,12 @@
 /** Thinking-kind detection and compat/map logic.  No pi-package imports — safe to import in tests. */
 
-export type ThinkingKind = "openai" | "openrouter" | "together" | "deepseek" | "qwen" | "zai";
+export type ThinkingKind =
+  | "openai"
+  | "openrouter"
+  | "together"
+  | "deepseek"
+  | "qwen"
+  | "zai";
 
 type ProviderThinkingKind = Exclude<ThinkingKind, "openai">;
 
@@ -50,23 +56,26 @@ function normalizeHint(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function matchesKeywords(text: string, keywords: string[]): boolean {
-  const lower = text.toLowerCase();
-  return keywords.some((kw) => lower.includes(kw));
-}
-
 function matchesR1Token(text: string): boolean {
   return /(?:^|[^a-z0-9])r1(?:[^a-z0-9]|$)/i.test(text);
 }
 
 // Pre-normalized alias tables for separator-insensitive matching.
-const NORM_HINT_ALIASES: Record<ProviderThinkingKind, string[]> = Object.fromEntries(
-  Object.entries(PROVIDER_HINT_ALIASES).map(([k, v]) => [k, v.map(normalizeHint)]),
-) as Record<ProviderThinkingKind, string[]>;
+const NORM_HINT_ALIASES: Record<ProviderThinkingKind, string[]> =
+  Object.fromEntries(
+    Object.entries(PROVIDER_HINT_ALIASES).map(([k, v]) => [
+      k,
+      v.map(normalizeHint),
+    ]),
+  ) as Record<ProviderThinkingKind, string[]>;
 
-const NORM_MODEL_KEYWORDS: Record<ProviderThinkingKind, string[]> = Object.fromEntries(
-  Object.entries(MODEL_KEYWORD_FALLBACK).map(([k, v]) => [k, v.map(normalizeHint)]),
-) as Record<ProviderThinkingKind, string[]>;
+const NORM_MODEL_KEYWORDS: Record<ProviderThinkingKind, string[]> =
+  Object.fromEntries(
+    Object.entries(MODEL_KEYWORD_FALLBACK).map(([k, v]) => [
+      k,
+      v.map(normalizeHint),
+    ]),
+  ) as Record<ProviderThinkingKind, string[]>;
 
 // ── detection ───────────────────────────────────────────────────
 
@@ -74,24 +83,46 @@ function detectThinkingKindFromModel(
   item: ThinkingModelHint,
   match?: ThinkingMatchHint,
 ): ThinkingKind | undefined {
-  const rawTexts = [item.id, item.name, item.display_name, match?.model?.id, match?.model?.name]
-    .filter((v): v is string => typeof v === "string");
+  const rawTexts = [
+    item.id,
+    item.name,
+    item.display_name,
+    match?.model?.id,
+    match?.model?.name,
+  ].filter((v): v is string => typeof v === "string");
   const normalizedTexts = rawTexts.map((v) => normalizeHint(v));
 
   for (const kind of ["openrouter", "together"] as const) {
-    if (normalizedTexts.some((t) => NORM_MODEL_KEYWORDS[kind].some((kw) => t.includes(kw)))) return kind;
+    if (
+      normalizedTexts.some((t) =>
+        NORM_MODEL_KEYWORDS[kind].some((kw) => t.includes(kw)),
+      )
+    )
+      return kind;
   }
 
   if (
-    normalizedTexts.some((t) => NORM_MODEL_KEYWORDS.deepseek.some((kw) => t.includes(kw))) ||
+    normalizedTexts.some((t) =>
+      NORM_MODEL_KEYWORDS.deepseek.some((kw) => t.includes(kw)),
+    ) ||
     rawTexts.some((t) => matchesR1Token(t))
   ) {
     return "deepseek";
   }
 
-  if (normalizedTexts.some((t) => NORM_MODEL_KEYWORDS.qwen.some((kw) => t.includes(kw)))) return "qwen";
+  if (
+    normalizedTexts.some((t) =>
+      NORM_MODEL_KEYWORDS.qwen.some((kw) => t.includes(kw)),
+    )
+  )
+    return "qwen";
 
-  if (normalizedTexts.some((t) => NORM_MODEL_KEYWORDS.zai.some((kw) => t.includes(kw)))) return "zai";
+  if (
+    normalizedTexts.some((t) =>
+      NORM_MODEL_KEYWORDS.zai.some((kw) => t.includes(kw)),
+    )
+  )
+    return "zai";
 
   return undefined;
 }
@@ -126,7 +157,12 @@ export interface ThinkingCompat {
   requiresReasoningContentOnAssistantMessages?: boolean;
 }
 
-function baseCompat(): Omit<ThinkingCompat, "thinkingFormat" | "supportsReasoningEffort" | "requiresReasoningContentOnAssistantMessages"> {
+function baseCompat(): Omit<
+  ThinkingCompat,
+  | "thinkingFormat"
+  | "supportsReasoningEffort"
+  | "requiresReasoningContentOnAssistantMessages"
+> {
   return {
     supportsStore: false,
     supportsDeveloperRole: false,
@@ -134,7 +170,9 @@ function baseCompat(): Omit<ThinkingCompat, "thinkingFormat" | "supportsReasonin
   };
 }
 
-export function modelThinkingCompat(thinkingKind: ThinkingKind): ThinkingCompat {
+export function modelThinkingCompat(
+  thinkingKind: ThinkingKind,
+): ThinkingCompat {
   switch (thinkingKind) {
     case "deepseek":
       return {
@@ -144,35 +182,69 @@ export function modelThinkingCompat(thinkingKind: ThinkingKind): ThinkingCompat 
         requiresReasoningContentOnAssistantMessages: true,
       };
     case "qwen":
-      return { ...baseCompat(), supportsReasoningEffort: false, thinkingFormat: "qwen" };
+      return {
+        ...baseCompat(),
+        supportsReasoningEffort: false,
+        thinkingFormat: "qwen",
+      };
     case "zai":
-      return { ...baseCompat(), supportsReasoningEffort: false, thinkingFormat: "zai" };
+      return {
+        ...baseCompat(),
+        supportsReasoningEffort: false,
+        thinkingFormat: "zai",
+      };
     case "together":
-      return { ...baseCompat(), supportsReasoningEffort: false, thinkingFormat: "together" };
+      return {
+        ...baseCompat(),
+        supportsReasoningEffort: false,
+        thinkingFormat: "together",
+      };
     case "openrouter":
-      return { ...baseCompat(), supportsReasoningEffort: false, thinkingFormat: "openrouter" };
+      return {
+        ...baseCompat(),
+        supportsReasoningEffort: false,
+        thinkingFormat: "openrouter",
+      };
     default:
-      return { ...baseCompat(), supportsReasoningEffort: false, thinkingFormat: "openai" };
+      return {
+        ...baseCompat(),
+        supportsReasoningEffort: false,
+        thinkingFormat: "openai",
+      };
   }
 }
 
 // ── level map builder ───────────────────────────────────────────
 
-export type ThinkingLevelMap = Partial<Record<
-  "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
-  string | null
->>;
+export type ThinkingLevelMap = Partial<
+  Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh", string | null>
+>;
 
-export function modelThinkingLevelMap(thinkingKind: ThinkingKind): ThinkingLevelMap | undefined {
+export function modelThinkingLevelMap(
+  thinkingKind: ThinkingKind,
+): ThinkingLevelMap | undefined {
   switch (thinkingKind) {
     case "deepseek":
-      return { minimal: null, low: null, medium: null, high: "high", xhigh: "xhigh" };
+      return {
+        minimal: null,
+        low: null,
+        medium: null,
+        high: "high",
+        xhigh: "xhigh",
+      };
     case "qwen":
     case "zai":
     case "together":
       return { minimal: null, low: null, medium: null };
     case "openrouter":
-      return { off: "none", minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh" };
+      return {
+        off: "none",
+        minimal: null,
+        low: "low",
+        medium: "medium",
+        high: "high",
+        xhigh: "xhigh",
+      };
     default:
       return undefined;
   }

@@ -1,6 +1,6 @@
 /**
  * Validation that imports real source from src/thinking.ts (no pi-package deps).
- * Run: npx tsx validate.ts
+ * Run: node validate.ts
  */
 
 import {
@@ -13,24 +13,37 @@ let passed = 0;
 let failed = 0;
 
 function assert(description: string, condition: boolean, detail?: string) {
-  if (condition) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${description}`); }
-  else { failed++; console.error(`  \x1b[31m✗\x1b[0m ${description}${detail ? " — " + detail : ""}`); }
+  if (condition) {
+    passed++;
+    console.log(`  \x1b[32m✓\x1b[0m ${description}`);
+  } else {
+    failed++;
+    console.error(
+      `  \x1b[31m✗\x1b[0m ${description}${detail ? ` — ${detail}` : ""}`,
+    );
+  }
 }
 
 // ── Thinking adaptation cases ──────────────────────────────────
 console.log("=== Thinking adaptation ===");
 
 {
-  const kind = detectThinkingKind({ id: "deepseek-v4-pro", owned_by: "deepseek" });
+  const kind = detectThinkingKind({
+    id: "deepseek-v4-pro",
+    owned_by: "deepseek",
+  });
   assert("1. DeepSeek kind", kind === "deepseek", `got ${kind}`);
   const compat = modelThinkingCompat(kind);
   assert("1. thinkingFormat", compat.thinkingFormat === "deepseek");
   assert("1. supportsReasoningEffort", compat.supportsReasoningEffort === true);
-  assert("1. requiresReasoningContentOnAssistantMessages", compat.requiresReasoningContentOnAssistantMessages === true);
+  assert(
+    "1. requiresReasoningContentOnAssistantMessages",
+    compat.requiresReasoningContentOnAssistantMessages === true,
+  );
   const map = modelThinkingLevelMap(kind);
-  assert("1. xhigh→max", map?.xhigh === "max");
+  assert("1. xhigh", map?.xhigh === "xhigh");
   assert("1. minimal null", map?.minimal === null);
-  assert("1. off omitted", (map as any)?.off === undefined);
+  assert("1. off omitted", map?.off === undefined);
 }
 
 {
@@ -38,7 +51,10 @@ console.log("=== Thinking adaptation ===");
   assert("2. Qwen kind", kind === "qwen");
   const compat = modelThinkingCompat(kind);
   assert("2. thinkingFormat", compat.thinkingFormat === "qwen");
-  assert("2. supportsReasoningEffort false", compat.supportsReasoningEffort === false);
+  assert(
+    "2. supportsReasoningEffort false",
+    compat.supportsReasoningEffort === false,
+  );
   const map = modelThinkingLevelMap(kind);
   assert("2. minimal null", map?.minimal === null);
   assert("2. low null", map?.low === null);
@@ -46,7 +62,10 @@ console.log("=== Thinking adaptation ===");
 }
 
 {
-  const kind = detectThinkingKind({ id: "qwen-max" }, { providerId: "alibaba", model: {} });
+  const kind = detectThinkingKind(
+    { id: "qwen-max" },
+    { providerId: "alibaba", model: {} },
+  );
   assert("2b. Qwen via alibaba providerId", kind === "qwen");
 }
 
@@ -55,7 +74,10 @@ console.log("=== Thinking adaptation ===");
   assert("3. Z.ai kind", kind === "zai");
   const compat = modelThinkingCompat(kind);
   assert("3. thinkingFormat", compat.thinkingFormat === "zai");
-  assert("3. supportsReasoningEffort false", compat.supportsReasoningEffort === false);
+  assert(
+    "3. supportsReasoningEffort false",
+    compat.supportsReasoningEffort === false,
+  );
 }
 
 {
@@ -64,24 +86,33 @@ console.log("=== Thinking adaptation ===");
 }
 
 {
-  const kind = detectThinkingKind({ id: "deepseek/deepseek-r1", owned_by: "together" });
+  const kind = detectThinkingKind({
+    id: "deepseek/deepseek-r1",
+    owned_by: "together",
+  });
   assert("4. Together-hosts-DeepSeek → together", kind === "together");
 }
 
 {
-  const kind = detectThinkingKind({ id: "Qwen/Qwen3-32B", owned_by: "together" });
+  const kind = detectThinkingKind({
+    id: "Qwen/Qwen3-32B",
+    owned_by: "together",
+  });
   assert("4b. Together-hosts-Qwen → together", kind === "together");
 }
 
 {
-  const kind = detectThinkingKind({ id: "deepseek/deepseek-chat", owned_by: "openrouter" });
+  const kind = detectThinkingKind({
+    id: "deepseek/deepseek-chat",
+    owned_by: "openrouter",
+  });
   assert("5. OpenRouter-hosts-DeepSeek → openrouter", kind === "openrouter");
   const map = modelThinkingLevelMap(kind);
   assert("5. off→none", map?.off === "none");
   assert("5. low→low", map?.low === "low");
   assert("5. medium", map?.medium === "medium");
   assert("5. high", map?.high === "high");
-  assert("5. xhigh null", map?.xhigh === null);
+  assert("5. xhigh", map?.xhigh === "xhigh");
 }
 
 {
@@ -89,7 +120,10 @@ console.log("=== Thinking adaptation ===");
   assert("6. Unknown → openai", kind === "openai");
   const compat = modelThinkingCompat(kind);
   assert("6. thinkingFormat", compat.thinkingFormat === "openai");
-  assert("6. supportsReasoningEffort false", compat.supportsReasoningEffort === false);
+  assert(
+    "6. supportsReasoningEffort false",
+    compat.supportsReasoningEffort === false,
+  );
   const map = modelThinkingLevelMap(kind);
   assert("6. no map", map === undefined);
 }
@@ -102,7 +136,10 @@ console.log("\n=== Precedence ===");
     { id: "deepseek-chat", owned_by: "deepseek" },
     { providerId: "openrouter", model: {} },
   );
-  assert("F1. openrouter providerId overrides deepseek owned_by", kind === "openrouter");
+  assert(
+    "F1. openrouter providerId overrides deepseek owned_by",
+    kind === "openrouter",
+  );
 }
 
 {
@@ -145,12 +182,20 @@ console.log("\n=== Separators ===");
 
 {
   const kind = detectThinkingKind({ id: "my-model", owned_by: "open_router" });
-  assert("S2. owned_by open_router → openrouter", kind === "openrouter", `got ${kind}`);
+  assert(
+    "S2. owned_by open_router → openrouter",
+    kind === "openrouter",
+    `got ${kind}`,
+  );
 }
 
 {
   const kind = detectThinkingKind({ id: "deep-seek-chat" });
-  assert("S3. model id deep-seek-chat → deepseek", kind === "deepseek", `got ${kind}`);
+  assert(
+    "S3. model id deep-seek-chat → deepseek",
+    kind === "deepseek",
+    `got ${kind}`,
+  );
 }
 
 {

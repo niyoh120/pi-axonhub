@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pandada8/pi-axonhub"
+    "url": "https://github.com/niyoh120/pi-axonhub"
   },
   "keywords": [
     "pi",
@@ -37,12 +37,15 @@
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.4",
     "@earendil-works/pi-ai": "file:../../badlogic/pi-mono/packages/ai",
     "@earendil-works/pi-coding-agent": "file:../../badlogic/pi-mono/packages/coding-agent",
     "@types/node": "^24.3.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && biome check .",
+    "format": "biome format --write .",
+    "lint": "biome lint ."
   }
 }

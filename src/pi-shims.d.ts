@@ -18,7 +18,12 @@ declare module "@earendil-works/pi-ai" {
     baseUrl: string;
     reasoning: boolean;
     input: ("text" | "image")[];
-    cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    cost: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    };
     contextWindow: number;
     maxTokens: number;
     headers?: Record<string, string>;
@@ -52,7 +57,13 @@ declare module "@earendil-works/pi-ai" {
       cacheRead: number;
       cacheWrite: number;
       totalTokens: number;
-      cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+      cost: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        total: number;
+      };
     };
     stopReason: string;
     errorMessage?: string;
@@ -63,7 +74,8 @@ declare module "@earendil-works/pi-ai" {
     | { type: "error"; reason: string; error: AssistantMessage }
     | { type: string; [key: string]: unknown };
 
-  export interface AssistantMessageEventStream extends AsyncIterable<AssistantMessageEvent> {
+  export interface AssistantMessageEventStream
+    extends AsyncIterable<AssistantMessageEvent> {
     push(event: AssistantMessageEvent): void;
     end(result?: AssistantMessage): void;
   }
@@ -88,7 +100,13 @@ declare module "@earendil-works/pi-ai" {
 }
 
 declare module "@earendil-works/pi-coding-agent" {
-  import type { Api, AssistantMessageEventStream, Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
+  import type {
+    Api,
+    AssistantMessageEventStream,
+    Context,
+    Model,
+    SimpleStreamOptions,
+  } from "@earendil-works/pi-ai";
 
   export interface ProviderModelConfig {
     id: string;
@@ -97,10 +115,20 @@ declare module "@earendil-works/pi-coding-agent" {
     baseUrl?: string;
     reasoning: boolean;
     input: ("text" | "image")[];
-    cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    cost: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    };
     contextWindow: number;
     maxTokens: number;
-    thinkingLevelMap?: Partial<Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh", string | null>>;
+    thinkingLevelMap?: Partial<
+      Record<
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
+        string | null
+      >
+    >;
     headers?: Record<string, string>;
     compat?: Model<Api>["compat"];
   }
@@ -113,7 +141,11 @@ declare module "@earendil-works/pi-coding-agent" {
         apiKey?: string;
         api?: Api;
         models?: ProviderModelConfig[];
-        streamSimple?: (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
+        streamSimple?: (
+          model: Model<Api>,
+          context: Context,
+          options?: SimpleStreamOptions,
+        ) => AssistantMessageEventStream;
       },
     ): void;
   }
