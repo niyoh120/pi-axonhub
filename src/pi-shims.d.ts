@@ -125,7 +125,7 @@ declare module "@earendil-works/pi-coding-agent" {
     maxTokens: number;
     thinkingLevelMap?: Partial<
       Record<
-        "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
         string | null
       >
     >;

@@ -289,9 +289,11 @@ function modelBaseUrl(baseUrl: string, owner?: string) {
 
 import {
   detectThinkingKind,
+  gpt56ThinkingLevelMap,
   modelThinkingCompat,
   modelThinkingLevelMap,
   type ThinkingKind,
+  type ThinkingLevelMap,
 } from "./thinking.js";
 
 function isAnthropicAdaptiveThinkingModel(id: string) {
@@ -371,8 +373,13 @@ function toProviderModel(
     baseUrl: modelBaseUrl(baseUrl, owner),
   };
 
-  if (reasoning && thinkingKind) {
-    const levelMap = modelThinkingLevelMap(thinkingKind);
+  if (reasoning) {
+    let levelMap: ThinkingLevelMap | undefined;
+    if (api === "openai-responses") {
+      levelMap = gpt56ThinkingLevelMap(item.id);
+    } else if (thinkingKind) {
+      levelMap = modelThinkingLevelMap(thinkingKind);
+    }
     if (levelMap) result.thinkingLevelMap = levelMap;
   }
 

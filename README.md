@@ -60,4 +60,6 @@ The extension auto-detects the thinking protocol for OpenAI-compatible models so
 | OpenRouter        | `openrouter`      | off, low, medium, high, xhigh     | `reasoning: { effort }`                       |
 | Unknown / generic | `openai`          | off                              | `reasoning_effort` (not sent if unsupported)  |
 
+GPT-5.6 models, including Sol, Terra, and Luna, use the Responses API and expose the `xhigh` and `max` thinking levels.
+
 Detection uses `owned_by`, `models.dev` provider id, and model id/name keywords with the precedence described above. Models that are not identified fall back to the existing safe generic OpenAI-compatible default.

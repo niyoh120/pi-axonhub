@@ -5,6 +5,7 @@
 
 import {
   detectThinkingKind,
+  gpt56ThinkingLevelMap,
   modelThinkingCompat,
   modelThinkingLevelMap,
 } from "./src/thinking.ts";
@@ -126,6 +127,26 @@ console.log("=== Thinking adaptation ===");
   );
   const map = modelThinkingLevelMap(kind);
   assert("6. no map", map === undefined);
+}
+
+{
+  const maps = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].map(
+    gpt56ThinkingLevelMap,
+  );
+  assert(
+    "7. GPT-5.6 models support xhigh",
+    maps.every((map) => map?.xhigh === "xhigh"),
+  );
+  assert(
+    "7. GPT-5.6 models support max",
+    maps.every((map) => map?.max === "max"),
+  );
+  assert(
+    "7. other GPT versions omit extended map",
+    ["gpt-5.5", "gpt-5.60"].every(
+      (id) => gpt56ThinkingLevelMap(id) === undefined,
+    ),
+  );
 }
 
 // ── Precedence ──────────────────────────────────────────────────

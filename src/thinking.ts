@@ -217,8 +217,20 @@ export function modelThinkingCompat(
 // ── level map builder ───────────────────────────────────────────
 
 export type ThinkingLevelMap = Partial<
-  Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh", string | null>
+  Record<
+    "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
+    string | null
+  >
 >;
+
+/** GPT-5.6 exposes Pi's extended reasoning levels through Responses API. */
+export function gpt56ThinkingLevelMap(
+  id: string,
+): ThinkingLevelMap | undefined {
+  if (!/(?:^|[^0-9])gpt-5\.6(?:[^0-9]|$)/.test(id.toLowerCase()))
+    return undefined;
+  return { xhigh: "xhigh", max: "max" };
+}
 
 export function modelThinkingLevelMap(
   thinkingKind: ThinkingKind,
