@@ -10,6 +10,7 @@
   },
   "keywords": [
     "pi",
+    "pi-package",
     "pi-extension",
     "axonhub",
     "llm"
@@ -27,6 +28,9 @@
     ".": "./src/index.ts"
   },
   "types": "./src/index.ts",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "pi": {
     "extensions": [
       "./src/index.ts"
@@ -38,13 +42,15 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
-    "@earendil-works/pi-ai": "file:../../badlogic/pi-mono/packages/ai",
-    "@earendil-works/pi-coding-agent": "file:../../badlogic/pi-mono/packages/coding-agent",
+    "@earendil-works/pi-ai": "0.81.0",
+    "@earendil-works/pi-coding-agent": "0.81.0",
     "@types/node": "^24.3.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "check": "tsc --noEmit && biome check .",
+    "validate": "node validate.ts",
+    "test": "node --test test/*.test.ts",
+    "check": "tsc --noEmit && biome check . && npm run validate && npm test",
     "format": "biome format --write .",
     "lint": "biome lint ."
   }
