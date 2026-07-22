@@ -9,10 +9,12 @@ import {
   type Provider,
   type RefreshModelsContext,
 } from "@earendil-works/pi-ai";
-import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
-import { googleGenerativeAIApi } from "@earendil-works/pi-ai/api/google-generative-ai.lazy";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
+import {
+  anthropicMessagesApi,
+  googleGenerativeAIApi,
+  openAICompletionsApi,
+  openAIResponsesApi,
+} from "@earendil-works/pi-ai/compat";
 import {
   detectThinkingKind,
   gpt56ThinkingLevelMap,
