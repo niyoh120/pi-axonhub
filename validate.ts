@@ -5,6 +5,7 @@
 
 import {
   detectThinkingKind,
+  glm5ThinkingLevelMap,
   gpt56ThinkingLevelMap,
   modelThinkingCompat,
   modelThinkingLevelMap,
@@ -146,6 +147,71 @@ console.log("=== Thinking adaptation ===");
     ["gpt-5.5", "gpt-5.60"].every(
       (id) => gpt56ThinkingLevelMap(id) === undefined,
     ),
+  );
+}
+
+// ── GLM-5.2+ thinking levels ──────────────────────────────────────
+console.log("\n=== GLM-5.2+ thinking levels ===");
+
+{
+  assert(
+    "G1. glm-5.2 supports max",
+    glm5ThinkingLevelMap("glm-5.2")?.max === "max",
+  );
+  assert(
+    "G1. glm-5.2 supports xhigh",
+    glm5ThinkingLevelMap("glm-5.2")?.xhigh === "xhigh",
+  );
+  assert(
+    "G1. glm-5.2 omits high (not in base zai map or glm5 map)",
+    glm5ThinkingLevelMap("glm-5.2")?.high === undefined,
+  );
+}
+
+{
+  assert(
+    "G2. glm-5.10 supports max",
+    glm5ThinkingLevelMap("glm-5.10")?.max === "max",
+  );
+  assert(
+    "G2. glm5.10 (no dash) supports max",
+    glm5ThinkingLevelMap("glm5.10")?.max === "max",
+  );
+}
+
+{
+  assert(
+    "G3. glm-5.1 omitted (reasoning_effort unsupported)",
+    glm5ThinkingLevelMap("glm-5.1") === undefined,
+  );
+  assert("G3. glm-5 omitted", glm5ThinkingLevelMap("glm-5") === undefined);
+  assert("G3. glm-4.7 omitted", glm5ThinkingLevelMap("glm-4.7") === undefined);
+}
+
+{
+  assert(
+    "G4. unrelated id omitted",
+    glm5ThinkingLevelMap("gpt-5.6") === undefined,
+  );
+  assert(
+    "G4. glm-5-turbo omitted (no minor version)",
+    glm5ThinkingLevelMap("glm-5-turbo") === undefined,
+  );
+  assert(
+    "G4. glm-5.2-preview (suffix) supported",
+    glm5ThinkingLevelMap("glm-5.2-preview")?.max === "max",
+  );
+  assert(
+    "G4. org/glm-5.2 (owner-prefixed) supported",
+    glm5ThinkingLevelMap("org/glm-5.2")?.max === "max",
+  );
+  assert(
+    "G4. glm-4.5.1 (multi-dot old) omitted",
+    glm5ThinkingLevelMap("glm-4.5.1") === undefined,
+  );
+  assert(
+    "G4. chatglm5.2 (no boundary) omitted",
+    glm5ThinkingLevelMap("chatglm5.2") === undefined,
   );
 }
 

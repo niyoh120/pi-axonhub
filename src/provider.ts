@@ -6,6 +6,7 @@ import {
   type AuthResult,
   createProvider,
   type Model,
+  type OpenAICompletionsCompat,
   type Provider,
   type RefreshModelsContext,
 } from "@earendil-works/pi-ai";
@@ -17,6 +18,7 @@ import {
 } from "@earendil-works/pi-ai/compat";
 import {
   detectThinkingKind,
+  glm5ThinkingLevelMap,
   gpt56ThinkingLevelMap,
   modelThinkingCompat,
   modelThinkingLevelMap,
@@ -212,7 +214,17 @@ export function modelCompat(
   }
   if (owner === "gemini") return undefined;
   if (!thinkingKind) return undefined;
-  return modelThinkingCompat(thinkingKind) as Model<Api>["compat"];
+  const compat = modelThinkingCompat(thinkingKind) as Model<Api>["compat"];
+  // Z.AI documents reasoning_effort only for GLM-5.2+; enable it there so
+  // the max/xhigh levels from glm5ThinkingLevelMap are actually sent.
+  // thinkingKind === "zai" implies compat is the OpenAI completions flavor.
+  if (thinkingKind === "zai" && glm5ThinkingLevelMap(id) !== undefined) {
+    return {
+      ...(compat as OpenAICompletionsCompat),
+      supportsReasoningEffort: true,
+    };
+  }
+  return compat;
 }
 
 export function mergeAxonHubModels(
@@ -449,6 +461,12 @@ export function toProviderModel(
       levelMap = gpt56ThinkingLevelMap(item.id);
     } else if (thinkingKind) {
       levelMap = modelThinkingLevelMap(thinkingKind);
+      // GLM-5.2+ supports reasoning_effort with max/xhigh; merge into the
+      // base zai map so those extended levels become selectable.
+      if (thinkingKind === "zai") {
+        const glm5Map = glm5ThinkingLevelMap(item.id);
+        if (glm5Map) levelMap = { ...levelMap, ...glm5Map };
+      }
     }
     if (levelMap) result.thinkingLevelMap = levelMap;
   }

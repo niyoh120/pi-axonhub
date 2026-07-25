@@ -232,6 +232,21 @@ export function gpt56ThinkingLevelMap(
   return { xhigh: "xhigh", max: "max" };
 }
 
+/**
+ * GLM-5.2+ exposes reasoning_effort (max/xhigh) via the Z.AI thinking API.
+ * Z.AI documents reasoning_effort only for GLM-5.2 and above; earlier GLM-5
+ * and GLM-4.x models do not accept it.
+ */
+export function glm5ThinkingLevelMap(id: string): ThinkingLevelMap | undefined {
+  const match = id.toLowerCase().match(/(?:^|[^a-z0-9])glm-?(\d+)\.(\d+)/);
+  if (!match) return undefined;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  if (major < 5) return undefined;
+  if (major === 5 && minor < 2) return undefined;
+  return { xhigh: "xhigh", max: "max" };
+}
+
 export function modelThinkingLevelMap(
   thinkingKind: ThinkingKind,
 ): ThinkingLevelMap | undefined {
