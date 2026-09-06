@@ -5,23 +5,21 @@
 - This repository publishes the TypeScript ESM Pi extension `@pandada8/pi-axonhub`.
 - Support Node.js `>=22.19.0`; the publish workflow runs Node.js 24.
 - Use npm and keep `package-lock.json` synchronized with dependency changes.
-- The current Pi development dependencies resolve from `../../badlogic/pi-mono/packages/ai` and `../../badlogic/pi-mono/packages/coding-agent`.
+- Pi dependencies come from npm (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, currently 0.81.x).
 
 ## Commands
 
 - Install dependencies: `npm ci`
-- Required verification: `npm run check` (`tsc --noEmit` plus `biome check .`)
+- Required verification: `npm run check` (`tsc --noEmit`, `biome check .`, then the full `node --test` suite)
 - Lint: `npm run lint`
 - Format: `npm run format`
-- Manual thinking verification: `node validate.ts`
 - Biome is the project linter and formatter; its root configuration is `biome.json`. Use the npm scripts as the command source of truth.
 
 ## Module boundaries
 
-- `src/index.ts` owns extension startup, credentials, model discovery, caching, models.dev enrichment, API/base URL routing, provider registration, and the GPT `web_search` request hook.
-- `src/thinking.ts` owns provider detection, thinking compatibility, and thinking-level maps. Keep it free of Pi package imports so `validate.ts` can execute it directly.
-- `src/pi-shims.d.ts` contains compile-time declarations for the Pi APIs consumed by this package. Keep the shims limited to the used API surface.
-- `validate.ts` is a focused manual harness for `src/thinking.ts`; update it with observable thinking behavior changes.
+- `src/index.ts` owns extension startup, provider registration, and the `before_provider_request` hook that applies the final thinking-control policy to AxonHub OpenAI payloads and chains the GPT `web_search` injection.
+- `src/provider.ts` owns credentials, model discovery, catalog merging, models.dev enrichment (exact-ID matching with first-party preference), the three-state reasoning capability (`unknown`/`toggle`/`effort`) with its persisted marker, the unified OpenAI-compat configuration, API/base URL routing, and the pure `applyThinkingControl` payload helper.
+- Tests live in `test/provider.test.ts` and cover source disambiguation, capability/UI/store behavior, the final payload matrix, and serializer-level integration with real pi-ai streams.
 
 ## TypeScript conventions
 
@@ -32,13 +30,16 @@
 
 ## Architecture constraints
 
-- Register the provider as `axonhub` only when an API key resolves from extension options, `AXONHUB_API_KEY`, or Pi `auth.json`.
+- Register the `axonhub` provider at startup; the API key resolves at auth time from extension options, `AXONHUB_API_KEY`, or a stored `/login axonhub` credential in Pi `auth.json`. Without a key the provider appears for login but models stay unavailable.
 - Keep the default base URL `http://localhost:8090` and normalize trailing `/v1` or `/` before building endpoint URLs.
-- Fetch AxonHub models on every Pi startup and write the result to `~/.cache/pi/axonhub-models.json`.
-- Cache `https://models.dev/api.json` for one day and fall back to its existing cache when refresh fails.
+- Fetch AxonHub models on every Pi startup through Pi Provider Store; keep the store on partial failures, clear it on a successful dual-empty catalog, and restore it offline without network.
+- Cache `https://models.dev/api.json` at `~/.cache/pi/models-dev-api.json` for one day and fall back to its existing cache when refresh fails.
 - Route Anthropic models through `/anthropic`, Gemini models through `/gemini/v1beta`, and other models through `/v1`.
-- Preserve routing-provider precedence for thinking detection: OpenRouter and Together endpoint hints take priority over model-family keywords.
-- Preserve `compat.sendSessionAffinityHeaders: true` for AxonHub model configurations.
+- Derive thinking capability only from models.dev `reasoning_options` on the single matched entry: exact-ID match with `owned_by` first, then the first-party provider list, then the first candidate. Never merge effort levels across sources or guess brands from keywords.
+- Three states: `effort` (declared levels map to themselves; `off` maps to `none` only when a toggle or `none` value exists), `toggle` (`off`/`high` UI; on omits control so the server default applies), and `unknown` (omit all thinking control). `reasoning: false` overrides everything.
+- Persist the capability marker (`axonhubReasoningControl`, version 1) on models in the Provider Store only; it must never enter API payloads. Missing, stale, or malformed markers are treated as `unknown`, as are models rebuilt from an explicit `models.json` `models` array.
+- In `before_provider_request`, apply `applyThinkingControl` for AxonHub OpenAI-completions/responses payloads using `pi.getThinkingLevel()` narrowed defensively and clamped with Pi's own `clampThinkingLevel`; preserve messages, tools, `include`, and encrypted reasoning replay, and never modify the input payload in place.
+- Keep the unified OpenAI-completions compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField: "max_tokens"`, `requiresReasoningContentOnAssistantMessages: true`, `thinkingFormat: "openai"`, `supportsReasoningEffort: true`) and `compat.sendSessionAffinityHeaders: true` for AxonHub model configurations; native Anthropic/Gemini models keep their existing compat.
 - Keep API keys and auth payloads out of logs, errors, fixtures, and committed files.
 
 ## Commits and releases

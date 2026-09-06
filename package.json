@@ -48,9 +48,8 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "validate": "node validate.ts",
     "test": "node --test test/*.test.ts",
-    "check": "tsc --noEmit && biome check . && npm run validate && npm test",
+    "check": "tsc --noEmit && biome check . && npm test",
     "format": "biome format --write .",
     "lint": "biome lint ."
   }

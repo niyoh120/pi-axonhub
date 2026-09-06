@@ -63,17 +63,34 @@ pi -e /path/to/pi-axonhub
 
 OpenAI-compatible models are sent to AxonHub `/v1`. Anthropic-owned models are sent to AxonHub `/anthropic`. Gemini-owned models are sent to AxonHub `/gemini/v1beta`.
 
-The extension auto-detects the thinking protocol for OpenAI-compatible models so that reasoning parameters are sent in the format expected by the upstream provider, not a generic OpenAI format. When both a routing/hosting provider hint (OpenRouter, Together) and a model-family keyword (DeepSeek, Qwen, etc.) are present, the routing provider wins because the wire protocol is determined by the endpoint, not the model family.
+## Thinking control
 
-| Detected provider | `thinkingFormat` | Supported thinking levels     | Wire parameters                        |
-| ----------------- | ---------------- | ----------------------------- | -------------------------------------- |
-| DeepSeek          | `deepseek`       | off, high, xhigh              | `thinking: { type }, reasoning_effort` |
-| Qwen / Alibaba    | `qwen`           | off, high                     | `enable_thinking`                      |
-| Z.ai / Zhipu/GLM  | `zai`            | off, high                     | `enable_thinking`                      |
-| Together          | `together`       | off, high                     | `reasoning: { enabled }`               |
-| OpenRouter        | `openrouter`     | off, low, medium, high, xhigh | `reasoning: { effort }`                |
-| Unknown / generic | `openai`         | off                           | `reasoning_effort` when supported      |
+AxonHub terminates the OpenAI protocol and converts standard OpenAI thinking control for the actual upstream, so the extension sends only standard OpenAI fields and derives thinking capabilities from models.dev `reasoning_options` data. Every OpenAI-completions model gets the same compatibility guarantees: no `store`, `system` role, `max_tokens` field, and `reasoning_content` backfill on replayed assistant messages for reasoning models. GPT-family models use the Responses API and receive the built-in `web_search` tool when missing.
 
-GPT-5.6 models, including Sol, Terra, and Luna, use the Responses API and expose the `xhigh` and `max` thinking levels. GPT requests also receive the built-in `web_search` tool when missing.
+models.dev entries are matched by exact model ID. When several aggregators mirror the same ID, `owned_by` wins, then first-party metadata sources (OpenAI, Anthropic, Google, DeepSeek, Z.ai/Zhipu, Alibaba, Moonshot, MiniMax, xAI, Mistral, Cohere), then the first candidate. The selected entry alone provides the capability data; effort levels are never merged across sources.
 
-Detection uses `owned_by`, `models.dev` provider id, and model id/name keywords with the precedence described above. Models that are not identified fall back to the existing safe generic OpenAI-compatible default.
+Each OpenAI-path reasoning model is classified into one of three states:
+
+| State | models.dev data | Pi UI levels | Outbound control |
+| ----- | --------------- | ------------ | ---------------- |
+| `effort` | At least one declared effort level (`minimal`…`max`) | The declared levels, plus `off` when `none`/toggle is declared | `reasoning_effort` (completions) / `reasoning.effort` (responses) with the declared value |
+| `toggle` | A toggle without declared effort levels | `off` and `high` only | `off` sends `none`; `high` sends nothing |
+| `unknown` | No match, missing/empty/invalid data, `none` without a toggle, or budget-token-only | Pi's default level display | All thinking control fields are omitted |
+
+Meaning of the toggle UI labels:
+
+- `off` sends the standard OpenAI `none` effort, which disables reasoning where the upstream supports it.
+- `high` means "adopt the server default". Pi's default `medium` clamps up to `high` because it is the only non-off slot. Nothing is sent, so the upstream default (on or off) applies. The model never claimed support for a `high` effort value.
+
+For `unknown` models the UI can still show Pi's default levels, but the final request hook strips every thinking control field (`reasoning_effort`, `reasoning`, and legacy private `thinking`/`enable_thinking`), so no unverified parameter reaches AxonHub. The same applies when `reasoning: false`. This omission rule takes precedence over an explicit `off`.
+
+The hook only rewrites top-level thinking control fields of OpenAI-completions and OpenAI-responses payloads. Native Anthropic and Gemini models keep their existing behavior (off, token budgets, adaptive thinking). Real thinking history, `reasoning_content`, tool calls, signatures, and encrypted reasoning replay items in `messages`/`input` are preserved. Responses `include` entries such as `reasoning.encrypted_content` are kept exactly as Pi generated them and are never added when absent, so stateless multi-turn reasoning replay keeps working even when effort control is omitted. Authentication headers, session affinity, store/max-token settings, and tools are untouched.
+
+### Capability persistence and custom models
+
+The three-state capability is stored on each model as an extension-internal marker (`axonhubReasoningControl`) inside the Provider Store; it never appears in API payloads. The marker survives online refresh, JSON persistence, and offline restore.
+
+Two boundaries to know:
+
+- An older catalog persisted before this version keeps its old static level maps until the first successful online refresh replaces the model structure. The hook already treats those unmarked models as `unknown` and omits thinking control, so no stale parameter is sent; only the UI may briefly show the old levels.
+- A hand-maintained `models.json` entry for the `axonhub` provider with an explicit `models` array rebuilds those models from the JSON definition, which drops the extension marker; such models are treated as `unknown` and thinking control is omitted. Plain `modelOverrides` field merges preserve the marker. A hand-written `thinkingLevelMap` alone is never treated as models.dev capability evidence.

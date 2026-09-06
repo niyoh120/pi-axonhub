@@ -4,11 +4,14 @@ import { dirname, join } from "node:path";
 import {
   type Api,
   type AuthResult,
+  clampThinkingLevel,
   createProvider,
   type Model,
+  type ModelThinkingLevel,
   type OpenAICompletionsCompat,
   type Provider,
   type RefreshModelsContext,
+  type ThinkingLevelMap,
 } from "@earendil-works/pi-ai";
 import {
   anthropicMessagesApi,
@@ -16,15 +19,6 @@ import {
   openAICompletionsApi,
   openAIResponsesApi,
 } from "@earendil-works/pi-ai/compat";
-import {
-  detectThinkingKind,
-  glm5ThinkingLevelMap,
-  gpt56ThinkingLevelMap,
-  modelThinkingCompat,
-  modelThinkingLevelMap,
-  type ThinkingKind,
-  type ThinkingLevelMap,
-} from "./thinking.ts";
 
 export const PROVIDER_ID = "axonhub";
 export const DEFAULT_BASE_URL = "http://localhost:8090";
@@ -86,6 +80,8 @@ type ModelsDevModel = {
   attachment?: boolean;
   reasoning?: boolean;
   tool_call?: boolean;
+  /** Validated at runtime; models.dev may omit, null, or reshape it. */
+  reasoning_options?: unknown;
   modalities?: {
     input?: string[];
     output?: string[];
@@ -126,6 +122,97 @@ const OWNER_BY_PROVIDER_ID: Record<string, "anthropic" | "gemini" | "openai"> =
     google: "gemini",
     openai: "openai",
   };
+
+/**
+ * models.dev provider IDs that publish first-party metadata. When several
+ * aggregators mirror the same model ID, these sources win over aggregator
+ * entries; the actual upstream channel is still decided by AxonHub routing.
+ */
+const FIRST_PARTY_MODELS_DEV_PROVIDERS: readonly string[] = [
+  "openai",
+  "anthropic",
+  "google",
+  "deepseek",
+  "zai",
+  "zhipuai",
+  "alibaba",
+  "alibaba-cn",
+  "moonshotai",
+  "moonshotai-cn",
+  "minimax",
+  "minimax-cn",
+  "xai",
+  "mistral",
+  "cohere",
+];
+
+/** Effort levels models.dev may declare; "none" is handled as the off value. */
+const DECLARABLE_EFFORT_LEVELS: readonly string[] = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+const MODEL_THINKING_LEVELS: readonly string[] = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+/**
+ * Top-level request fields this extension owns for thinking control. Anything
+ * else in the payload (messages, tools, include, auth-related fields) is left
+ * untouched.
+ */
+const THINKING_CONTROL_FIELDS: readonly string[] = [
+  "reasoning_effort",
+  "reasoning",
+  "thinking",
+  "enable_thinking",
+];
+
+/** Extension-internal thinking capability state derived from models.dev. */
+export type AxonHubReasoningControlMode = "unknown" | "toggle" | "effort";
+
+export type AxonHubReasoningControl = {
+  version: 1;
+  mode: AxonHubReasoningControlMode;
+};
+
+/**
+ * Model shape persisted in the axonhub Provider Store. The extra field is
+ * consumed only by this extension and must never leak into API payloads.
+ */
+export type AxonHubProviderModel = Model<Api> & {
+  axonhubReasoningControl?: AxonHubReasoningControl;
+};
+
+/** Classified models.dev reasoning_options: undefined means "unknown". */
+export type ReasoningCapability = {
+  mode: "toggle" | "effort";
+  levelMap: ThinkingLevelMap;
+};
+
+/**
+ * Toggle-only UI: "off" maps to OpenAI none; "high" is the single non-off
+ * slot (omitted here) and means "adopt the server default effort". Pi's
+ * default medium clamps up to high.
+ */
+const TOGGLE_LEVEL_MAP: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: null,
+  medium: null,
+  xhigh: null,
+  max: null,
+};
 
 export function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/v1\/?$/, "").replace(/\/+$/, "");
@@ -202,10 +289,25 @@ export function isAnthropicAdaptiveThinkingModel(id: string) {
   );
 }
 
+/**
+ * Unified Chat Completions compatibility: AxonHub terminates the OpenAI
+ * protocol, so every completions model gets the same guarantees (no store,
+ * system role, max_tokens field, reasoning_content backfill on replayed
+ * assistant messages when the model reasons).
+ */
+const OPENAI_COMPLETIONS_COMPAT: OpenAICompletionsCompat = {
+  supportsStore: false,
+  supportsDeveloperRole: false,
+  maxTokensField: "max_tokens",
+  requiresReasoningContentOnAssistantMessages: true,
+  thinkingFormat: "openai",
+  supportsReasoningEffort: true,
+};
+
 export function modelCompat(
   id: string,
-  owner?: string,
-  thinkingKind?: ThinkingKind,
+  owner: string | undefined,
+  api: Api,
 ): Model<Api>["compat"] | undefined {
   if (owner === "anthropic") {
     return isAnthropicAdaptiveThinkingModel(id)
@@ -213,18 +315,10 @@ export function modelCompat(
       : undefined;
   }
   if (owner === "gemini") return undefined;
-  if (!thinkingKind) return undefined;
-  const compat = modelThinkingCompat(thinkingKind) as Model<Api>["compat"];
-  // Z.AI documents reasoning_effort only for GLM-5.2+; enable it there so
-  // the max/xhigh levels from glm5ThinkingLevelMap are actually sent.
-  // thinkingKind === "zai" implies compat is the OpenAI completions flavor.
-  if (thinkingKind === "zai" && glm5ThinkingLevelMap(id) !== undefined) {
-    return {
-      ...(compat as OpenAICompletionsCompat),
-      supportsReasoningEffort: true,
-    };
-  }
-  return compat;
+  // The unified guarantees are Chat Completions only; Responses models keep
+  // their own serializer defaults (developer role, store:false, ...).
+  if (api !== "openai-completions") return undefined;
+  return OPENAI_COMPLETIONS_COMPAT;
 }
 
 export function mergeAxonHubModels(
@@ -382,6 +476,11 @@ export function modelsDevIndex(payload: ModelsDevResponse) {
   return index;
 }
 
+/**
+ * Exact-ID match with first-party preference: owned_by wins, then the
+ * first-party provider list in order, then the first candidate. No keyword
+ * or fuzzy brand guessing.
+ */
 export function modelsDevMatch(
   item: AxonHubModel,
   index: Map<string, ModelsDevMatch[]>,
@@ -391,12 +490,94 @@ export function modelsDevMatch(
   if (!matches?.length) return;
 
   const owner = item.owned_by;
-  return (
-    (owner ? matches.find((match) => match.providerId === owner) : undefined) ??
-    matches.find((match) => match.providerId === "openai") ??
-    matches.find((match) => match.providerId === "anthropic") ??
-    matches[0]
-  );
+  if (owner) {
+    const byOwner = matches.find((match) => match.providerId === owner);
+    if (byOwner) return byOwner;
+  }
+
+  for (const providerId of FIRST_PARTY_MODELS_DEV_PROVIDERS) {
+    const firstParty = matches.find((match) => match.providerId === providerId);
+    if (firstParty) return firstParty;
+  }
+
+  return matches[0];
+}
+
+/**
+ * Normalize models.dev reasoning_options into a three-state capability.
+ *
+ * - effort: at least one recognizable non-off effort value is declared.
+ *   Every Pi slot starts unsupported (null), declared levels map to
+ *   themselves, and "off" maps to OpenAI none only when a valid toggle or a
+ *   "none" value exists.
+ * - toggle: a valid toggle without any non-off effort value. "off" maps to
+ *   none; "high" stays selectable as the adopt-server-default slot.
+ * - unknown (undefined): no match, missing/empty/invalid data, only unknown
+ *   values, "none" without a toggle, or budget-token-only entries.
+ *
+ * Unknown entry types, "default"/null values, and duplicates are ignored;
+ * multiple valid effort entries merge.
+ */
+export function reasoningCapabilityFromOptions(
+  reasoningOptions: unknown,
+): ReasoningCapability | undefined {
+  if (!Array.isArray(reasoningOptions)) return undefined;
+
+  let hasToggle = false;
+  let hasNone = false;
+  const efforts = new Set<string>();
+
+  for (const entry of reasoningOptions) {
+    if (!isObject(entry) || Array.isArray(entry)) continue;
+    if (entry.type === "toggle") {
+      hasToggle = true;
+      continue;
+    }
+    if (entry.type !== "effort") continue;
+    const values = entry.values;
+    if (!Array.isArray(values)) continue;
+    for (const value of values) {
+      if (value === "none") hasNone = true;
+      else if (
+        typeof value === "string" &&
+        DECLARABLE_EFFORT_LEVELS.includes(value)
+      ) {
+        efforts.add(value);
+      }
+    }
+  }
+
+  if (efforts.size > 0) {
+    const levelMap: ThinkingLevelMap = {
+      off: hasToggle || hasNone ? "none" : null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: null,
+      xhigh: null,
+      max: null,
+    };
+    for (const effort of efforts) {
+      (levelMap as Record<string, string | null>)[effort] = effort;
+    }
+    return { mode: "effort", levelMap };
+  }
+
+  if (hasToggle) {
+    return { mode: "toggle", levelMap: { ...TOGGLE_LEVEL_MAP } };
+  }
+  return undefined;
+}
+
+/** Read the extension marker defensively: missing/unknown/malformed → unknown. */
+export function axonhubReasoningControlMode(
+  model: Model<Api> | undefined,
+): AxonHubReasoningControlMode {
+  const marker = (model as AxonHubProviderModel | undefined)
+    ?.axonhubReasoningControl;
+  if (!isObject(marker) || marker.version !== 1) return "unknown";
+  if (marker.mode === "toggle" || marker.mode === "effort") return marker.mode;
+  return "unknown";
 }
 
 function hasModality(
@@ -411,7 +592,7 @@ export function toProviderModel(
   baseUrl: string,
   item: AxonHubModel,
   match?: ModelsDevMatch,
-): Model<Api> | undefined {
+): AxonHubProviderModel | undefined {
   if (!item.id) return;
 
   const cached = match?.model;
@@ -424,11 +605,9 @@ export function toProviderModel(
     false;
   const reasoning = item.capabilities?.reasoning ?? cached?.reasoning ?? false;
 
-  const thinkingKind =
-    api === "openai-completions" ? detectThinkingKind(item, match) : undefined;
-  const compat = modelCompat(item.id, owner, thinkingKind);
+  const compat = modelCompat(item.id, owner, api);
 
-  const result: Model<Api> = {
+  const result: AxonHubProviderModel = {
     id: item.id,
     name: item.name ?? item.display_name ?? cached?.name ?? item.id,
     api,
@@ -455,23 +634,127 @@ export function toProviderModel(
     compat: { ...compat, sendSessionAffinityHeaders: true },
   };
 
-  if (reasoning) {
-    let levelMap: ThinkingLevelMap | undefined;
-    if (api === "openai-responses") {
-      levelMap = gpt56ThinkingLevelMap(item.id);
-    } else if (thinkingKind) {
-      levelMap = modelThinkingLevelMap(thinkingKind);
-      // GLM-5.2+ supports reasoning_effort with max/xhigh; merge into the
-      // base zai map so those extended levels become selectable.
-      if (thinkingKind === "zai") {
-        const glm5Map = glm5ThinkingLevelMap(item.id);
-        if (glm5Map) levelMap = { ...levelMap, ...glm5Map };
-      }
+  // Dynamic levels and the capability marker are OpenAI-path only; native
+  // Anthropic/Gemini models keep their off/budget/adaptive behavior.
+  if (
+    reasoning &&
+    (api === "openai-completions" || api === "openai-responses")
+  ) {
+    const capability = reasoningCapabilityFromOptions(
+      cached?.reasoning_options,
+    );
+    if (capability) {
+      result.thinkingLevelMap = capability.levelMap;
+      result.axonhubReasoningControl = { version: 1, mode: capability.mode };
     }
-    if (levelMap) result.thinkingLevelMap = levelMap;
   }
 
   return result;
+}
+
+function isKnownThinkingLevel(value: unknown): value is ModelThinkingLevel {
+  return typeof value === "string" && MODEL_THINKING_LEVELS.includes(value);
+}
+
+function clampHostThinkingLevel(
+  model: Model<Api>,
+  hostThinkingLevel: unknown,
+): ModelThinkingLevel {
+  if (isKnownThinkingLevel(hostThinkingLevel)) {
+    return clampThinkingLevel(model, hostThinkingLevel);
+  }
+  // Host APIs declare ThinkingLevel without "off", but session state can hold
+  // "off" at runtime, and future levels would arrive as unrecognized strings.
+  // Defer unrecognized values to Pi's own clamp, whose unknown-level branch
+  // resolves to the first level the model supports.
+  return clampThinkingLevel(model, hostThinkingLevel as ModelThinkingLevel);
+}
+
+function stripThinkingControl(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!THINKING_CONTROL_FIELDS.some((field) => field in payload)) {
+    return payload;
+  }
+  const next = { ...payload };
+  for (const field of THINKING_CONTROL_FIELDS) {
+    delete next[field];
+  }
+  return next;
+}
+
+function writeThinkingControl(
+  payload: Record<string, unknown>,
+  api: string,
+  effort: string,
+  keepReasoningAuxFields: boolean,
+): Record<string, unknown> {
+  // stripThinkingControl copies only when control fields exist; copy here
+  // otherwise so the original payload is never mutated.
+  const stripped = stripThinkingControl(payload);
+  const writable = stripped === payload ? { ...payload } : stripped;
+
+  if (api === "openai-responses") {
+    const prior =
+      keepReasoningAuxFields && isObject(payload.reasoning)
+        ? payload.reasoning
+        : undefined;
+    writable.reasoning = { ...prior, effort };
+  } else {
+    writable.reasoning_effort = effort;
+  }
+  return writable;
+}
+
+/**
+ * Final thinking-control policy for AxonHub models, applied to the serialized
+ * payload right before it is sent.
+ *
+ * | model state             | user level   | completions        | responses               |
+ * |-------------------------|--------------|--------------------|-------------------------|
+ * | reasoning=false/unknown | any          | omit               | omit                    |
+ * | toggle                  | off          | reasoning_effort none | reasoning {effort none} |
+ * | toggle                  | on           | omit (server default) | omit (server default) |
+ * | effort                  | off          | reasoning_effort none | reasoning {effort none} |
+ * | effort                  | declared     | reasoning_effort value | reasoning {effort value} |
+ *
+ * Missing data always omits control parameters, which takes precedence over
+ * an explicit off. Existing Responses `include` entries and everything in
+ * messages/input are preserved untouched.
+ */
+export function applyThinkingControl(
+  model: Model<Api> | undefined,
+  hostThinkingLevel: unknown,
+  payload: unknown,
+): unknown {
+  if (!model || model.provider !== PROVIDER_ID) return payload;
+  if (!isObject(payload)) return payload;
+
+  const api = model.api;
+  if (api !== "openai-completions" && api !== "openai-responses") {
+    return payload;
+  }
+
+  const mode = axonhubReasoningControlMode(model);
+  if (!model.reasoning || mode === "unknown") {
+    return stripThinkingControl(payload);
+  }
+
+  const level = clampHostThinkingLevel(model, hostThinkingLevel);
+
+  if (mode === "toggle") {
+    return level === "off"
+      ? writeThinkingControl(payload, api, "none", false)
+      : stripThinkingControl(payload);
+  }
+
+  if (level === "off") {
+    return writeThinkingControl(payload, api, "none", false);
+  }
+  const mapped = model.thinkingLevelMap?.[level];
+  return typeof mapped === "string"
+    ? writeThinkingControl(payload, api, mapped, true)
+    : stripThinkingControl(payload);
 }
 
 export type WebSearchPayload = {
@@ -578,7 +861,7 @@ export function createAxonHubProvider(
         .map((item) =>
           toProviderModel(baseUrl, item, modelsDevMatch(item, index)),
         )
-        .filter((model): model is Model<Api> => model !== undefined);
+        .filter((model): model is AxonHubProviderModel => model !== undefined);
     },
     api: {
       "openai-completions": openAICompletionsApi(),
